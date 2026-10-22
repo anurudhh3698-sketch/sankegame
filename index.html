@@ -1,0 +1,219 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Anurudh Snake Arena</title>
+<style>
+* { box-sizing: border-box; }
+body {
+  margin: 0; min-height: 100vh; padding: 20px;
+  display: flex; justify-content: center; align-items: center;
+  background: radial-gradient(circle at top,#182747,#080b14 65%);
+  color: white; font-family: Arial, sans-serif;
+}
+.game {
+  width: 100%; max-width: 440px; padding: 22px;
+  border: 1px solid #34435b; border-radius: 24px;
+  background: #101827; box-shadow: 0 0 35px #00ff8820;
+}
+h1 { color: #58ff9a; text-align: center; margin: 0 0 6px; }
+.sub { text-align:center; color:#9baac0; margin-bottom:20px; }
+.stats { display:flex; justify-content:space-between; margin:14px 0; }
+canvas { width:100%; background:#080f18; border:1px solid #29394a;
+  border-radius:12px; display:block; }
+.controls { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-top:14px; }
+button, select {
+  padding:12px; border:1px solid #34435b; border-radius:10px;
+  background:#202d40; color:white; font-size:15px; cursor:pointer;
+}
+button:hover { border-color:#58ff9a; }
+.main { background:#58ff9a; color:#08140d; font-weight:bold; }
+.settings { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:16px; }
+label { display:flex; flex-direction:column; gap:7px; color:#b8c5d8; font-size:13px; }
+select { width:100%; }
+#message { text-align:center; color:#58ff9a; min-height:20px; margin-top:12px; }
+</style>
+</head>
+<body>
+<div class="game">
+  <h1>🐍 SNAKE ARENA</h1>
+  <div class="sub">Created by Anurudh Singh</div>
+
+  <div class="stats">
+    <span>Score: <b id="score">0</b></span>
+    <span>Best: <b id="best">0</b></span>
+  </div>
+
+  <canvas id="board" width="400" height="400"></canvas>
+
+  <div id="message">Press START to play!</div>
+  <button class="main" id="start" style="width:100%">▶ START GAME</button>
+
+  <div class="settings">
+    <label>Snake Colour
+      <select id="snakeColor">
+        <option value="#58ff9a">Neon Green</option>
+        <option value="#00d9ff">Electric Blue</option>
+        <option value="#ff4dca">Pink</option>
+        <option value="#b388ff">Purple</option>
+        <option value="#ffb020">Orange</option>
+        <option value="#ffffff">White</option>
+      </select>
+    </label>
+    <label>Fruit Style
+      <select id="fruit">
+        <option value="🍎">🍎 Apple</option>
+        <option value="🍓">🍓 Strawberry</option>
+        <option value="🍊">🍊 Orange</option>
+        <option value="🍇">🍇 Grapes</option>
+        <option value="🍒">🍒 Cherries</option>
+        <option value="⭐">⭐ Star</option>
+      </select>
+    </label>
+  </div>
+
+  <div class="controls">
+    <span></span><button data-dir="up">⬆️</button><span></span>
+    <button data-dir="left">⬅️</button>
+    <button data-dir="down">⬇️</button>
+    <button data-dir="right">➡️</button>
+  </div>
+  <button id="restart" style="width:100%;margin-top:8px">↻ RESTART</button>
+</div>
+
+<script>
+const canvas = document.getElementById("board");
+const ctx = canvas.getContext("2d");
+const cell = 20, count = 20;
+const $ = id => document.getElementById(id);
+
+let snake, dir, nextDir, food, score, timer, running = false;
+let best = 0;
+
+try { best = Number(localStorage.getItem("snakeBest")) || 0; }
+catch(e) {}
+$("best").textContent = best;
+
+function placeFood() {
+  do {
+    food = {x:Math.floor(Math.random()*count),
+            y:Math.floor(Math.random()*count)};
+  } while (snake.some(p => p.x===food.x && p.y===food.y));
+}
+
+function draw() {
+  ctx.fillStyle = "#080f18";
+  ctx.fillRect(0,0,400,400);
+
+  ctx.strokeStyle = "#14202c";
+  for(let i=0;i<=400;i+=cell) {
+    ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,400); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0,i); ctx.lineTo(400,i); ctx.stroke();
+  }
+
+  ctx.font = "18px Arial";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText($("fruit").value,food.x*cell+10,food.y*cell+10);
+
+  snake.forEach((p,i) => {
+    ctx.fillStyle = $("snakeColor").value;
+    ctx.shadowColor = $("snakeColor").value;
+    ctx.shadowBlur = i===0 ? 12 : 3;
+    ctx.beginPath();
+    ctx.roundRect(p.x*cell+1,p.y*cell+1,18,18,5);
+    ctx.fill();
+  });
+  ctx.shadowBlur = 0;
+
+  const h = snake[0];
+  ctx.fillStyle = "#07120b";
+  if(dir.x !== 0) {
+    ctx.fillRect(h.x*cell+(dir.x>0?13:4),h.y*cell+5,3,3);
+    ctx.fillRect(h.x*cell+(dir.x>0?13:4),h.y*cell+12,3,3);
+  } else {
+    ctx.fillRect(h.x*cell+5,h.y*cell+(dir.y>0?13:4),3,3);
+    ctx.fillRect(h.x*cell+12,h.y*cell+(dir.y>0?13:4),3,3);
+  }
+}
+
+function reset() {
+  clearInterval(timer);
+  running = false;
+  score = 0;
+  snake = [{x:10,y:10},{x:9,y:10},{x:8,y:10}];
+  dir = {x:1,y:0};
+  nextDir = {...dir};
+  $("score").textContent = 0;
+  placeFood();
+  draw();
+}
+
+function start() {
+  if(running) return;
+  running = true;
+  $("message").textContent = "Good luck! 🍀";
+  clearInterval(timer);
+  timer = setInterval(tick,115);
+}
+
+function tick() {
+  dir = {...nextDir};
+  const head = {x:snake[0].x+dir.x,y:snake[0].y+dir.y};
+  const eating = head.x===food.x && head.y===food.y;
+  const body = eating ? snake : snake.slice(0,-1);
+
+  if(head.x<0 || head.x>=count || head.y<0 || head.y>=count ||
+     body.some(p=>p.x===head.x && p.y===head.y)) {
+    clearInterval(timer);
+    running = false;
+    $("message").textContent = "Game Over! Score: " + score;
+    return;
+  }
+
+  snake.unshift(head);
+  if(eating) {
+    score += 10;
+    $("score").textContent = score;
+    if(score>best) {
+      best = score;
+      $("best").textContent = best;
+      try { localStorage.setItem("snakeBest",best); } catch(e) {}
+    }
+    placeFood();
+  } else snake.pop();
+  draw();
+}
+
+function changeDirection(d) {
+  const dirs = {
+    up:{x:0,y:-1}, down:{x:0,y:1},
+    left:{x:-1,y:0}, right:{x:1,y:0}
+  };
+  const n = dirs[d];
+  if(n.x===-dir.x && n.y===-dir.y) return;
+  nextDir = n;
+}
+
+document.addEventListener("keydown",e=>{
+  const keys = {ArrowUp:"up",w:"up",ArrowDown:"down",s:"down",
+    ArrowLeft:"left",a:"left",ArrowRight:"right",d:"right"};
+  if(keys[e.key]) { e.preventDefault(); changeDirection(keys[e.key]); }
+  if(e.key===" " && !running) start();
+});
+
+document.querySelectorAll("[data-dir]").forEach(btn=>{
+  btn.addEventListener("click",()=>changeDirection(btn.dataset.dir));
+});
+
+$("start").addEventListener("click",start);
+$("restart").addEventListener("click",()=>{reset();start();});
+$("snakeColor").addEventListener("change",draw);
+$("fruit").addEventListener("change",draw);
+
+reset();
+</script>
+</body>
+</html>
